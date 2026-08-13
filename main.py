@@ -3,24 +3,35 @@ import os
 from src.video_processor import VideoProcessor
 
 def main():
-    parser = argparse.ArgumentParser(description="RetailVision AI - Phase 1")
+    parser = argparse.ArgumentParser(description="RetailVision AI")
     parser.add_argument("--source", type=str, default=None, help="Path to input video")
-    parser.add_argument("--output", type=str, default="output/processed.mp4", help="Path to output video")
+    parser.add_argument("--output", type=str, default=None, help="Path to output video")
+    parser.add_argument("--track", action="store_true", help="Enable multi-object tracking (Phase 2)")
+    parser.add_argument("--model", type=str, default="yolov8s.pt", help="Path to YOLO model (e.g. yolov8n.pt, yolov8s.pt)")
     parser.add_argument("--test", action="store_true", help="Run a quick initialization test without a video")
     args = parser.parse_args()
 
+    # Determine default output path based on tracking mode
+    output_path = args.output
+    if output_path is None:
+        if args.track:
+            output_path = "output/tracking_result.mp4"
+        else:
+            output_path = "output/processed.mp4"
+
     # Ensure output directory exists
-    os.makedirs(os.path.dirname(args.output), exist_ok=True)
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
     
     # Ensure models directory exists for downloading weights
     os.makedirs("models", exist_ok=True)
-    model_path = "models/yolov8n.pt"
-
+    model_path = f"models/{os.path.basename(args.model)}" if not os.path.exists(args.model) else args.model
+    # just pass args.model directly, Ultralytics downloads to current dir if not in models/
+    
     if args.test:
         print("Running initialization test...")
         from src.detector import PersonDetector
         try:
-            detector = PersonDetector(model_path=model_path)
+            detector = PersonDetector(model_path=args.model)
             print("Model initialized successfully!")
             print("Initialization test passed.")
             return
@@ -36,7 +47,7 @@ def main():
         print(f"Error: Input video not found at {args.source}")
         return
 
-    processor = VideoProcessor(source_path=args.source, output_path=args.output, model_path=model_path)
+    processor = VideoProcessor(source_path=args.source, output_path=output_path, model_path=args.model, track=args.track)
     processor.process_video()
 
 if __name__ == "__main__":

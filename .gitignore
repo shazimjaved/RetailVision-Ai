@@ -3,8 +3,6 @@ __pycache__/
 .venv/
 venv/
 env/
-# Ignore models
-models/*.pt
 # Ignore input and output data
 input/*
 !input/.gitkeep
