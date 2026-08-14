@@ -1,12 +1,21 @@
 import cv2
 import time
+import math
 from .detector import PersonDetector
 
+def ccw(A, B, C):
+    return (C[1]-A[1]) * (B[0]-A[0]) > (B[1]-A[1]) * (C[0]-A[0])
+
+def intersect(A, B, C, D):
+    return ccw(A, C, D) != ccw(B, C, D) and ccw(A, B, C) != ccw(A, B, D)
+
 class VideoProcessor:
-    def __init__(self, source_path, output_path, model_path="yolov8s.pt", track=False):
+    def __init__(self, source_path, output_path, model_path="yolov8s.pt", track=False, count=False, line_coords=None):
         self.source_path = source_path
         self.output_path = output_path
-        self.track = track
+        self.count = count
+        self.track = track if not count else True  # Counting requires tracking
+        self.line_coords = line_coords
         self.detector = PersonDetector(model_path=model_path)
         
     def process_video(self):
@@ -40,6 +49,15 @@ class VideoProcessor:
         total_conf = 0.0
         total_detections = 0
         max_detections = 0
+        
+        # Counting state
+        default_line = self.line_coords or (1050, 1080, 1700, 710)
+        x1_l, y1_l, x2_l, y2_l = default_line
+        total_entries = 0
+        total_exits = 0
+        total_crossings = 0
+        track_state = {}
+        cooldown_frames = 15
         
         start_time_processing = time.time()
         prev_time = time.time()
@@ -76,6 +94,48 @@ class VideoProcessor:
                         track_id = int(box.id[0])
                         current_frame_ids.add(track_id)
                         total_unique_ids.add(track_id)
+                        
+                        # Phase 3: Counting Logic
+                        if self.count:
+                            px = int((x1 + x2) / 2)
+                            py = int(y2)
+                            cv2.circle(frame, (px, py), 4, (0, 255, 255), -1)
+                            
+                            # Phase 3: Counting Logic (Segment Intersection)
+                            if track_id not in track_state:
+                                track_state[track_id] = {'last_point': (px, py), 'last_crossing_frame': -cooldown_frames, 'last_direction': None}
+                            else:
+                                last_point = track_state[track_id]['last_point']
+                                last_crossing_frame = track_state[track_id]['last_crossing_frame']
+                                last_direction = track_state[track_id]['last_direction']
+                                
+                                A = (x1_l, y1_l)
+                                B = (x2_l, y2_l)
+                                C = last_point
+                                D = (px, py)
+                                
+                                if (frame_count - last_crossing_frame) > cooldown_frames:
+                                    if intersect(A, B, C, D):
+                                        # Calculate direction using cross product of AB and CD
+                                        cross = (B[0] - A[0]) * (D[1] - C[1]) - (B[1] - A[1]) * (D[0] - C[0])
+                                        
+                                        # Filter out micro-movements (jitter) that don't represent a real physical crossing
+                                        if abs(cross) > 1000:
+                                            direction = "ENTRY" if cross < 0 else "EXIT"
+                                            
+                                            # Block consecutive same-direction events for the same ID
+                                            if direction != last_direction:
+                                                if direction == "ENTRY":
+                                                    total_entries += 1
+                                                else:
+                                                    total_exits += 1
+                                                total_crossings += 1
+                                                
+                                                track_state[track_id]['last_crossing_frame'] = frame_count
+                                                track_state[track_id]['last_direction'] = direction
+                                        
+                                # Always update last point
+                                track_state[track_id]['last_point'] = (px, py)
                     
                     # Draw box
                     cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
@@ -112,6 +172,27 @@ class VideoProcessor:
                 
             cv2.putText(frame, info_text, (20, 40), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
             
+            # Draw Phase 3 Counting Overlays
+            if self.count:
+                # Draw the localized segment
+                cv2.line(frame, (x1_l, y1_l), (x2_l, y2_l), (255, 0, 0), 3)
+                
+                # Draw INSIDE/OUTSIDE dynamic labels based on line orientation
+                dx = x2_l - x1_l
+                dy = y2_l - y1_l
+                length = math.hypot(dx, dy)
+                if length > 0:
+                    nx = dy / length * 60
+                    ny = -dx / length * 60
+                    mx = int((x1_l + x2_l) / 2)
+                    my = int((y1_l + y2_l) / 2)
+                    cv2.putText(frame, "INSIDE", (int(mx + nx) - 30, int(my + ny)), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 100, 100), 2)
+                    cv2.putText(frame, "OUTSIDE", (int(mx - nx) - 40, int(my - ny)), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (100, 100, 255), 2)
+
+                occupancy = max(0, total_entries - total_exits)
+                count_text = f"ENTRY: {total_entries} | EXIT: {total_exits} | OCCUPANCY: {occupancy}"
+                cv2.putText(frame, count_text, (20, 80), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 0), 2)
+            
             # Write frame
             out.write(frame)
             
@@ -141,6 +222,17 @@ class VideoProcessor:
             print(f"IDs persisted across consecutive frames: {id_persists}")
             print(f"Average detection confidence: {avg_conf:.3f}")
             print(f"Processing FPS: {overall_fps:.2f}")
+            print(f"------------------------")
+            
+        if self.count:
+            print(f"--- Counting Summary ---")
+            print(f"Total entries: {total_entries}")
+            print(f"Total exits: {total_exits}")
+            print(f"Final occupancy: {max(0, total_entries - total_exits)}")
+            print(f"Crossing events: {total_crossings}")
+            print(f"Default line used: {default_line}")
+            print(f"Duplicate protection: Active (15-frame cooldown)")
+            print(f"Output video: {self.output_path}")
             print(f"------------------------")
             
         return True

@@ -21,6 +21,9 @@ Reads a local video file, runs YOLOv8s for person detection, and outputs the pro
 ### Phase 2: Multi-Object Tracking
 Integrates BoT-SORT to assign persistent tracking IDs to detected persons across video frames.
 
+### Phase 3: Customer Counting
+Implements an accurate segment-based counting line at the store entrance to track customer entries, exits, and current occupancy. Features include bounding-box bottom-center contact points, jitter filtering, and a 15-frame debounce for highly reliable physical counting.
+
 ## Setup
 
 1. Create a virtual environment and install dependencies:
@@ -43,6 +46,12 @@ Output: `output/processed.mp4`
 python main.py --source input/sample.mp4 --track
 ```
 Output: `output/tracking_result.mp4`
+
+### Customer Counting (Phase 3)
+```bash
+python main.py --source input/sample.mp4 --track --count
+```
+Output: `output/counting_result.mp4`
 
 ### Options
 | Flag | Default | Description |

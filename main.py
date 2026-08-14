@@ -7,6 +7,8 @@ def main():
     parser.add_argument("--source", type=str, default=None, help="Path to input video")
     parser.add_argument("--output", type=str, default=None, help="Path to output video")
     parser.add_argument("--track", action="store_true", help="Enable multi-object tracking (Phase 2)")
+    parser.add_argument("--count", action="store_true", help="Enable entry/exit counting (Phase 3)")
+    parser.add_argument("--line", type=int, nargs=4, help="Counting line coordinates: x1 y1 x2 y2", default=None)
     parser.add_argument("--model", type=str, default="yolov8s.pt", help="Path to YOLO model (e.g. yolov8n.pt, yolov8s.pt)")
     parser.add_argument("--test", action="store_true", help="Run a quick initialization test without a video")
     args = parser.parse_args()
@@ -14,7 +16,9 @@ def main():
     # Determine default output path based on tracking mode
     output_path = args.output
     if output_path is None:
-        if args.track:
+        if args.count:
+            output_path = "output/counting_result.mp4"
+        elif args.track:
             output_path = "output/tracking_result.mp4"
         else:
             output_path = "output/processed.mp4"
@@ -47,7 +51,7 @@ def main():
         print(f"Error: Input video not found at {args.source}")
         return
 
-    processor = VideoProcessor(source_path=args.source, output_path=output_path, model_path=args.model, track=args.track)
+    processor = VideoProcessor(source_path=args.source, output_path=output_path, model_path=args.model, track=args.track, count=args.count, line_coords=args.line)
     processor.process_video()
 
 if __name__ == "__main__":
