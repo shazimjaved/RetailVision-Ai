@@ -53,10 +53,20 @@ python main.py --source input/sample.mp4 --track --count
 ```
 Output: `output/counting_result.mp4`
 
+### Zone & Journey Analytics (Phase 4)
+```bash
+python main.py --source input/sample.mp4 --track --count --zones --zone-debug --analytics-debug
+```
+Output: `output/zones_result.mp4`
+
 ### Options
 | Flag | Default | Description |
 |------|---------|-------------|
 | `--source` | — | Path to input video (required) |
 | `--track` | off | Enable BoT-SORT multi-object tracking |
+| `--count` | off | Enable entry/exit counting (Phase 3) |
+| `--zones` | off | Enable zone visualization (Phase 4.1) |
+| `--zone-debug` | off | Enable zone transitions/occupancy debug overlay (Phase 4.2) |
+| `--analytics-debug` | off | Enable zone analytics debug overlay (Phase 4.3) |
 | `--model` | `yolov8s.pt` | YOLO model variant |
 | `--output` | auto | Custom output path |
