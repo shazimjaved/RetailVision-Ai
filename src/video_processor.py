@@ -15,13 +15,14 @@ from .zone_tracker import ZoneTracker
 from .zone_analytics import ZoneAnalytics
 
 class VideoProcessor:
-    def __init__(self, source_path, output_path, model_path="yolov8s.pt", track=False, count=False, line_coords=None, zones_enabled=False, zone_debug=False, analytics_debug=False):
+    def __init__(self, source_path, output_path, model_path="yolov8s.pt", track=False, count=False, line_coords=None, zones_enabled=False, zone_debug=False, analytics_debug=False, analytics=False):
         self.source_path = source_path
         self.output_path = output_path
         self.count = count
         self.zones_enabled = zones_enabled
         self.zone_debug = zone_debug
         self.analytics_debug = analytics_debug
+        self.analytics = analytics
         self.track = track if not (count or zones_enabled) else True
         self.line_coords = line_coords
         self.detector = PersonDetector(model_path=model_path)
@@ -468,27 +469,40 @@ class VideoProcessor:
             print(f"State transitions tracked: {len(self.zone_tracker.transitions) if hasattr(self, 'zone_tracker') else 0}")
             print(f"Output video: {self.output_path}")
             print(f"-----------------------------------")
-            
-            print(f"\n--- PHASE 4.3 ANALYTICS SUMMARY ---")
-            print(f"Total tracking IDs generated: {len(total_unique_ids)}")
-            print(f"Total analytics customers: {len(self.zone_analytics.journeys)}")
-            completed_journeys = len([tid for tid in self.zone_analytics.journeys.keys() if tid in self.zone_analytics.finalized_tracks])
-            print(f"Total completed journeys: {completed_journeys}")
-            print(f"Total zone visits: {len(self.zone_analytics.visits)}")
-            print(f"\nZone statistics:")
-            z_stats = self.zone_analytics.get_zone_statistics()
-            for z, s in z_stats.items():
-                print(f"  {z}")
-                print(f"    Visitors: {s['unique_visitors_count']}")
-                print(f"    Visits: {s['total_visits']}")
-                print(f"    Avg dwell: {s['avg_dwell']:.1f} sec")
-                print(f"    Max dwell: {s['max_dwell']:.1f} sec")
-            
-            print(f"\nTop transitions:")
-            t_stats = self.zone_analytics.get_transition_statistics()
-            sorted_t = sorted(t_stats.items(), key=lambda item: item[1], reverse=True)
-            for i, (t_name, count) in enumerate(sorted_t[:5], 1):
-                print(f"  {i}. {t_name}: {count}")
-            print(f"-----------------------------------")
+            if self.analytics_debug:
+                print(f"\n--- PHASE 4.3 ANALYTICS SUMMARY ---")
+                print(f"Total tracking IDs generated: {len(total_unique_ids)}")
+                print(f"Total analytics customers: {len(self.zone_analytics.journeys)}")
+                completed_journeys = len([tid for tid in self.zone_analytics.journeys.keys() if tid in self.zone_analytics.finalized_tracks])
+                print(f"Total completed journeys: {completed_journeys}")
+                print(f"Total zone visits: {len(self.zone_analytics.visits)}")
+                print(f"\nZone statistics:")
+                z_stats = self.zone_analytics.get_zone_statistics()
+                for z, s in z_stats.items():
+                    print(f"  {z}")
+                    print(f"    Visitors: {s['unique_visitors_count']}")
+                    print(f"    Visits: {s['total_visits']}")
+                    print(f"    Avg dwell: {s['avg_dwell']:.1f} sec")
+                    print(f"    Max dwell: {s['max_dwell']:.1f} sec")
+                
+                print(f"\nTop transitions:")
+                t_stats = self.zone_analytics.get_transition_statistics()
+                sorted_t = sorted(t_stats.items(), key=lambda item: item[1], reverse=True)
+                for i, (t_name, count) in enumerate(sorted_t[:5], 1):
+                    print(f"  {i}. {t_name}: {count}")
+                print(f"-----------------------------------")
+                
+            if getattr(self, 'analytics', False):
+                from .analytics_report import AnalyticsDashboard
+                AnalyticsDashboard.generate_report(
+                    output_path=self.output_path,
+                    total_tracking_ids=len(total_unique_ids),
+                    total_analytics_customers=len(self.zone_analytics.journeys),
+                    entries=total_entries,
+                    exits=total_exits,
+                    final_occupancy=max(0, total_entries - total_exits),
+                    zone_stats=self.zone_analytics.get_zone_statistics(),
+                    transition_stats=self.zone_analytics.get_transition_statistics()
+                )
             
         return True

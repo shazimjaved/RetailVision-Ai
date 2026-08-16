@@ -11,6 +11,7 @@ def main():
     parser.add_argument("--zones", action="store_true", help="Enable zone visualization (Phase 4.1)")
     parser.add_argument("--zone-debug", action="store_true", help="Enable zone transitions/occupancy debug overlay (Phase 4.2)")
     parser.add_argument("--analytics-debug", action="store_true", help="Enable zone analytics debug overlay (Phase 4.3)")
+    parser.add_argument("--analytics", action="store_true", help="Generate final retail analytics dashboard and JSON report (Phase 4.4)")
     parser.add_argument("--line", type=int, nargs=4, help="Counting line coordinates: x1 y1 x2 y2", default=None)
     parser.add_argument("--model", type=str, default="yolov8s.pt", help="Path to YOLO model (e.g. yolov8n.pt, yolov8s.pt)")
     parser.add_argument("--test", action="store_true", help="Run a quick initialization test without a video")
@@ -65,7 +66,8 @@ def main():
         line_coords=args.line,
         zones_enabled=args.zones,
         zone_debug=args.zone_debug,
-        analytics_debug=args.analytics_debug
+        analytics_debug=args.analytics_debug,
+        analytics=args.analytics
     )
     processor.process_video()
 

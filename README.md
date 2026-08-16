@@ -59,6 +59,12 @@ python main.py --source input/sample.mp4 --track --count --zones --zone-debug --
 ```
 Output: `output/zones_result.mp4`
 
+### Analytics Dashboard & JSON Export
+```bash
+python main.py --source input/sample.mp4 --track --count --zones --analytics
+```
+Output: Generates `output/analytics.json` and a console dashboard.
+
 ### Options
 | Flag | Default | Description |
 |------|---------|-------------|
