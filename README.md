@@ -24,6 +24,12 @@ Integrates BoT-SORT to assign persistent tracking IDs to detected persons across
 ### Phase 3: Customer Counting
 Implements an accurate segment-based counting line at the store entrance to track customer entries, exits, and current occupancy. Features include bounding-box bottom-center contact points, jitter filtering, and a 15-frame debounce for highly reliable physical counting.
 
+### Phase 4: Zone & Journey Analytics
+Stateful zone occupancy tracking and customer journey analytics, producing aggregate metrics like zone visits, dwell times, and flow transitions.
+
+### Phase 5: Web Dashboard
+A professional React/Vite/Tailwind CSS frontend application that consumes the analytics data output by the Python pipeline to present a polished, real-time UI containing KPIs, zone performance charts, and customer flow visualizations.
+
 ## Setup
 
 1. Create a virtual environment and install dependencies:
@@ -59,11 +65,20 @@ python main.py --source input/sample.mp4 --track --count --zones --zone-debug --
 ```
 Output: `output/zones_result.mp4`
 
-### Analytics Dashboard & JSON Export
+### Analytics Export (Phase 4.4)
 ```bash
 python main.py --source input/sample.mp4 --track --count --zones --analytics
 ```
-Output: Generates `output/analytics.json` and a console dashboard.
+Output: Generates `output/analytics.json` containing the final processed retail metrics.
+
+### Web Dashboard (Phase 5)
+1. Generate the analytics data first (using the command above).
+2. Start the React dashboard:
+   ```bash
+   cd dashboard
+   npm run dev
+   ```
+3. Open `http://localhost:5173` in your browser.
 
 ### Options
 | Flag | Default | Description |

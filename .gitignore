@@ -10,3 +10,10 @@ input/*
 !input/.gitkeep
 output/*
 !output/.gitkeep
+
+# Web Dashboard (React/Vite)
+dashboard/node_modules/
+dashboard/dist/
+.env
+.env.local
+.DS_Store
