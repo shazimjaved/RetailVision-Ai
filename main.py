@@ -34,8 +34,9 @@ def main():
     
     # Ensure models directory exists for downloading weights
     os.makedirs("models", exist_ok=True)
-    model_path = f"models/{os.path.basename(args.model)}" if not os.path.exists(args.model) else args.model
-    # just pass args.model directly, Ultralytics downloads to current dir if not in models/
+    # Strictly enforce that the model goes into the models/ folder
+    model_filename = os.path.basename(args.model)
+    model_path = os.path.join("models", model_filename)
     
     if args.test:
         print("Running initialization test...")
