@@ -45,6 +45,9 @@ Stateful zone occupancy tracking and customer journey analytics, producing aggre
 ### Phase 5: Web Dashboard
 A professional React/Vite/Tailwind CSS frontend application that consumes the analytics data output by the Python pipeline to present a polished, real-time UI containing KPIs, zone performance charts, and customer flow visualizations.
 
+### Phase 6: Customer Movement Heatmap
+An isolated visual analytics experiment that consumes existing Phase 1-5 tracking coordinates to generate a spatial density heatmap representing where customers physically spend time. Uses Gaussian smoothing and a hot colormap to highlight high-traffic aisles.
+
 ---
 
 ## 💻 Setup Instructions
@@ -93,6 +96,12 @@ python main.py --source input/sample.mp4 --track --count --zones --zone-debug --
 python main.py --source input/sample.mp4 --track --count --zones --analytics
 ```
 *Output: Generates `output/analytics.json` containing the final processed retail metrics.*
+
+### 6. Customer Movement Heatmap
+```bash
+python heatmap.py --source input/sample.mp4 --zones
+```
+*Output: `output/heatmap_result.mp4`, `output/customer_heatmap.png`, and `output/heatmap_analytics.json`*
 
 ---
 
