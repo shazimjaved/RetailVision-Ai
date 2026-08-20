@@ -6,6 +6,22 @@ export interface CustomersStats {
   final_occupancy: number;
 }
 
+export interface HeatmapAnalytics {
+  total_frames: number;
+  tracked_position_samples: number;
+  heatmap_resolution: {
+    width: number;
+    height: number;
+  };
+  peak_density_location: {
+    x: number;
+    y: number;
+  };
+  peak_density_value: number;
+  processing_fps?: number;
+}
+
+
 export interface ZoneStats {
   visitors: number;
   visits: number;

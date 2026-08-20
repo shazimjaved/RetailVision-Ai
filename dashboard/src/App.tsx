@@ -7,14 +7,17 @@ import { InsightCards } from './components/InsightCards';
 import { ZoneCharts } from './components/ZoneCharts';
 import { ZoneComparison } from './components/ZoneComparison';
 import { CustomerFlow } from './components/CustomerFlow';
+import { CustomerHeatmap } from './components/CustomerHeatmap';
 import { ZoneSummaryTable } from './components/ZoneSummaryTable';
-import { fetchAnalyticsData } from './services/api';
-import type { AnalyticsData } from './types/analytics';
+import { fetchAnalyticsData, fetchHeatmapData } from './services/api';
+import type { AnalyticsData, HeatmapAnalytics } from './types/analytics';
 
 function App() {
   const [data, setData] = useState<AnalyticsData | null>(null);
+  const [heatmapData, setHeatmapData] = useState<HeatmapAnalytics | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+  const [heatmapError, setHeatmapError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
 
@@ -22,8 +25,17 @@ function App() {
     try {
       setIsRefreshing(true);
       setError(null);
+      setHeatmapError(null);
       const analytics = await fetchAnalyticsData();
       setData(analytics);
+      
+      try {
+        const hData = await fetchHeatmapData();
+        setHeatmapData(hData);
+      } catch (hErr) {
+        setHeatmapError('Heatmap data unavailable. Run the Phase 7 pipeline.');
+      }
+      
       setLastUpdated(new Date());
     } catch (err) {
       setError('Analytics data unavailable. Run the RetailVision AI processing pipeline to generate analytics.json.');
@@ -119,11 +131,19 @@ function App() {
               </section>
 
               {/* Customer Flow Section */}
-              <section id="flow" className="mt-10 pb-12 scroll-mt-24">
+              <section id="flow" className="mt-10 pb-6 scroll-mt-24">
                 <div className="flex items-center justify-between mb-2">
                   <h2 className="text-lg font-bold text-slate-900 tracking-tight">Customer Flow</h2>
                 </div>
                 <CustomerFlow transitions={data.top_transitions} />
+              </section>
+              
+              {/* Customer Heatmap Section */}
+              <section id="heatmap" className="mt-10 pb-12 scroll-mt-24">
+                <div className="flex items-center justify-between mb-2">
+                  <h2 className="text-lg font-bold text-slate-900 tracking-tight">Customer Heatmap</h2>
+                </div>
+                <CustomerHeatmap data={heatmapData} error={heatmapError} lastUpdated={lastUpdated} />
               </section>
             </div>
           )}
