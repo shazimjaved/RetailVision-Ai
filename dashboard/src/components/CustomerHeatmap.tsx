@@ -18,7 +18,7 @@ export const CustomerHeatmap: React.FC<CustomerHeatmapProps> = ({ data, error, l
         </div>
         <h3 className="text-xl font-bold text-slate-900 mb-2">Customer Heatmap Unavailable</h3>
         <p className="text-slate-500 max-w-md">
-          {error || "The heatmap data is not available yet. Run the Phase 7 processing pipeline to generate the heatmap."}
+          {error || "The heatmap data is not available yet. Run the processing pipeline to generate the heatmap."}
         </p>
       </div>
     );

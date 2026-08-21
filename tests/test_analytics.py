@@ -84,7 +84,7 @@ class TestZoneAnalytics(unittest.TestCase):
         self.assertEqual(analytics.visits[2]['zone'], 'PRODUCT / SHELF')
         self.assertEqual(analytics.visits[2]['visit_number'], 2)
 
-    def test_phase_3_exit_finalization(self):
+    def test_store_exit_finalization(self):
         tracker = MockZoneTracker()
         analytics = ZoneAnalytics(fps=30.0, max_lost_frames=30)
         
@@ -93,7 +93,7 @@ class TestZoneAnalytics(unittest.TestCase):
         analytics.update(100, tracker, [])
         
         tracker.track_states[4]['last_seen_frame'] = 150
-        analytics.update(150, tracker, phase_3_exits=[4])
+        analytics.update(150, tracker, store_exits=[4])
         
         self.assertIn(4, analytics.finalized_tracks)
         self.assertEqual(len(analytics.visits), 1)
@@ -156,7 +156,7 @@ class TestZoneAnalytics(unittest.TestCase):
         tracker.transitions.append({'track_id': 7, 'from_zone': 'CENTRAL AISLE', 'to_zone': 'PRODUCT / SHELF', 'transition_frame': 30})
         analytics.update(30, tracker, [])
         
-        analytics.update(30, tracker, phase_3_exits=[7])
+        analytics.update(30, tracker, store_exits=[7])
         
         stats = analytics.get_transition_statistics()
         self.assertEqual(stats['ENTRANCE -> CENTRAL AISLE'], 1)

@@ -33,7 +33,7 @@ function App() {
         const hData = await fetchHeatmapData();
         setHeatmapData(hData);
       } catch (hErr) {
-        setHeatmapError('Heatmap data unavailable. Run the Phase 7 pipeline.');
+        setHeatmapError('Heatmap data unavailable. Run the processing pipeline.');
       }
       
       setLastUpdated(new Date());

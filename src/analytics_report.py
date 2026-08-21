@@ -4,8 +4,8 @@ from typing import Dict, List, Any
 
 class AnalyticsDashboard:
     """
-    Phase 4.4: Retail Analytics Dashboard & Summary.
-    Responsible for presenting existing Phase 3 and Phase 4.3 analytics data.
+    Retail Analytics Dashboard & Summary.
+    Responsible for presenting existing store analytics data.
     Does NOT recalculate metrics or duplicate business logic.
     """
 

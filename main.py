@@ -1,76 +1,79 @@
 import argparse
 import os
+import sys
 from src.video_processor import VideoProcessor
 
+def print_header(source):
+    print("RetailVision AI By Shazim Javed")
+    print("────────────────────────────────────")
+    print(f"Input: {source}\n")
+    print("[1/5] Detecting & tracking...")
+    print("[2/5] Counting customers...")
+    print("[3/5] Analyzing zones...")
+    print("[4/5] Generating heatmap...")
+    print("[5/5] Exporting analytics...\n")
+
+def print_footer(metrics):
+    print("Processing complete.\n")
+    print(f"Customers: {metrics.get('customers', 0)}")
+    print(f"Entries: {metrics.get('entries', 0)}")
+    print(f"Exits: {metrics.get('exits', 0)}")
+    print(f"Occupancy: {metrics.get('occupancy', 0)}")
+    print("Zones analyzed: 4\n")
+    print("Outputs:")
+    print("  analytics.json")
+    print("  heatmap_analytics.json")
+    print("  customer_heatmap.png")
+    print("  processed video")
+
 def main():
-    parser = argparse.ArgumentParser(description="RetailVision AI")
-    parser.add_argument("--source", type=str, default=None, help="Path to input video")
-    parser.add_argument("--output", type=str, default=None, help="Path to output video")
-    parser.add_argument("--track", action="store_true", help="Enable multi-object tracking (Phase 2)")
-    parser.add_argument("--count", action="store_true", help="Enable entry/exit counting (Phase 3)")
-    parser.add_argument("--zones", action="store_true", help="Enable zone visualization (Phase 4.1)")
-    parser.add_argument("--zone-debug", action="store_true", help="Enable zone transitions/occupancy debug overlay (Phase 4.2)")
-    parser.add_argument("--analytics-debug", action="store_true", help="Enable zone analytics debug overlay (Phase 4.3)")
-    parser.add_argument("--analytics", action="store_true", help="Generate final retail analytics dashboard and JSON report (Phase 4.4)")
-    parser.add_argument("--line", type=int, nargs=4, help="Counting line coordinates: x1 y1 x2 y2", default=None)
-    parser.add_argument("--model", type=str, default="yolov8s.pt", help="Path to YOLO model (e.g. yolov8n.pt, yolov8s.pt)")
-    parser.add_argument("--test", action="store_true", help="Run a quick initialization test without a video")
+    parser = argparse.ArgumentParser(description="RetailVision AI Unified Production Runner")
+    parser.add_argument("--source", type=str, required=True, help="Path to input video")
+    parser.add_argument("--output", type=str, default="output/processed.mp4", help="Path to output video")
+    parser.add_argument("--model", type=str, default="models/yolov8s.pt", help="Path to YOLO model (e.g. models/yolov8s.pt)")
+    
+    # Optional debug flags (not required for normal execution)
+    parser.add_argument("--zone-debug", action="store_true", help="Enable zone occupancy debug overlay")
+    parser.add_argument("--analytics-debug", action="store_true", help="Enable analytics debug overlay")
     args = parser.parse_args()
 
-    # Determine default output path based on tracking mode
-    output_path = args.output
-    if output_path is None:
-        if args.zones:
-            output_path = "output/zones_result.mp4"
-        elif args.count:
-            output_path = "output/counting_result.mp4"
-        elif args.track:
-            output_path = "output/tracking_result.mp4"
-        else:
-            output_path = "output/processed.mp4"
-
-    # Ensure output directory exists
-    os.makedirs(os.path.dirname(output_path), exist_ok=True)
-    
-    # Ensure models directory exists for downloading weights
-    os.makedirs("models", exist_ok=True)
-    # Strictly enforce that the model goes into the models/ folder
-    model_filename = os.path.basename(args.model)
-    model_path = os.path.join("models", model_filename)
-    
-    if args.test:
-        print("Running initialization test...")
-        from src.detector import PersonDetector
-        try:
-            detector = PersonDetector(model_path=args.model)
-            print("Model initialized successfully!")
-            print("Initialization test passed.")
-            return
-        except Exception as e:
-            print(f"Initialization test failed: {e}")
-            return
-
-    if args.source is None:
-        print("Error: Please provide an input video using --source")
-        return
-        
     if not os.path.exists(args.source):
-        print(f"Error: Input video not found at {args.source}")
-        return
+        print(f"ERROR: Input video not found:\n{args.source}")
+        sys.exit(1)
 
-    processor = VideoProcessor(
-        source_path=args.source,
-        output_path=output_path,
-        model_path=model_path,
-        track=args.track,
-        count=args.count,
-        line_coords=args.line,
-        zones_enabled=args.zones,
-        zone_debug=args.zone_debug,
-        analytics_debug=args.analytics_debug,
-        analytics=args.analytics
-    )
-    processor.process_video()
+    print_header(args.source)
+
+    os.makedirs(os.path.dirname(args.output), exist_ok=True)
+    
+    # Ensure models directory exists
+    os.makedirs("models", exist_ok=True)
+    model_path = args.model
+
+    try:
+        processor = VideoProcessor(
+            source_path=args.source,
+            output_path=args.output,
+            model_path=model_path,
+            track=True,
+            count=True,
+            zones_enabled=True,
+            zone_debug=args.zone_debug,
+            analytics_debug=args.analytics_debug,
+            analytics=True,
+            heatmap_enabled=True
+        )
+        
+        metrics = processor.process_video()
+        
+        if not metrics:
+            print("ERROR: Unable to open input video or processing failed.")
+            sys.exit(1)
+            
+        print_footer(metrics)
+
+    except Exception as e:
+        print(f"\nERROR: Processing failed: {e}")
+        sys.exit(1)
 
 if __name__ == "__main__":
     main()

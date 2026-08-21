@@ -80,17 +80,17 @@ class ZoneAnalytics:
         
         return completed_visit
 
-    def update(self, frame_count: int, zone_tracker, phase_3_exits: List[int]):
+    def update(self, frame_count: int, zone_tracker, store_exits: List[int]):
         """
         Updates the analytics state.
         
         Args:
             frame_count: Current frame number.
             zone_tracker: Reference to the ZoneTracker instance.
-            phase_3_exits: List of track_ids that generated a Phase 3 EXIT crossing in this frame.
+            store_exits: List of track_ids that generated an EXIT crossing in this frame.
         """
-        # 1. Process Phase 3 EXIT (Semantic Completion - PRIMARY)
-        for track_id in phase_3_exits:
+        # 1. Process System EXIT (Semantic Completion - PRIMARY)
+        for track_id in store_exits:
             if track_id not in self.finalized_tracks:
                 self._close_visit(track_id, frame_count)
                 self.finalized_tracks.add(track_id)
@@ -102,7 +102,7 @@ class ZoneAnalytics:
             trans_frame = t['transition_frame']
             to_zone = t['to_zone']
             
-            # Skip if track already finalized (e.g., via Phase 3 EXIT)
+            # Skip if track already finalized (e.g., via EXIT)
             if track_id in self.finalized_tracks:
                 continue
                 

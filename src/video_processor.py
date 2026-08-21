@@ -13,9 +13,10 @@ import numpy as np
 from .detector import PersonDetector
 from .zone_tracker import ZoneTracker
 from .zone_analytics import ZoneAnalytics
+from .movement_heatmap import MovementHeatmap
 
 class VideoProcessor:
-    def __init__(self, source_path, output_path, model_path="yolov8s.pt", track=False, count=False, line_coords=None, zones_enabled=False, zone_debug=False, analytics_debug=False, analytics=False):
+    def __init__(self, source_path, output_path, model_path="yolov8s.pt", track=False, count=False, line_coords=None, zones_enabled=False, zone_debug=False, analytics_debug=False, analytics=False, heatmap_enabled=False):
         self.source_path = source_path
         self.output_path = output_path
         self.count = count
@@ -23,6 +24,7 @@ class VideoProcessor:
         self.zone_debug = zone_debug
         self.analytics_debug = analytics_debug
         self.analytics = analytics
+        self.heatmap_enabled = heatmap_enabled
         self.track = track if not (count or zones_enabled) else True
         self.line_coords = line_coords
         self.detector = PersonDetector(model_path=model_path)
@@ -31,12 +33,7 @@ class VideoProcessor:
             self.zone_tracker = ZoneTracker(debounce_frames=10, max_lost_frames=30)
 
         
-        # Phase 4.1: Base Zone Definitions in 1920×1008 Reference Coordinate Space
-        # Exactly matching user's annotated layout:
-        # - CHECKOUT (Orange/Yellow): Left cashier & queue floor
-        # - CENTRAL AISLE (Cyan/Blue): Main middle walking corridor
-        # - PRODUCT / SHELF (Magenta/Purple): Floor strip in front of right shelves
-        # - ENTRANCE (Green): Doorway & mat area at entrance threshold
+
         self.base_zones = {
             "CHECKOUT": np.array([
                 (60, 250),
@@ -120,10 +117,13 @@ class VideoProcessor:
         # Define the codec and create VideoWriter object
         fourcc = cv2.VideoWriter_fourcc(*'mp4v')
         out = cv2.VideoWriter(self.output_path, fourcc, fps, (width, height))
-        
-        print(f"Processing video: {self.source_path}")
-        print(f"Output will be saved to: {self.output_path}")
-        print(f"Tracking enabled: {self.track}")
+
+        if self.heatmap_enabled:
+            self.heatmap = MovementHeatmap(width, height)
+            self.tracked_samples = 0
+            self.first_frame = None
+            
+        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
 
         frame_count = 0
         total_unique_ids = set()
@@ -154,7 +154,7 @@ class VideoProcessor:
         track_state = {}
         cooldown_frames = 15
         
-        # Phase 4.2: Zone Occupancy State
+        # Zone Occupancy State
         # Handled by ZoneTracker class now
         if self.zones_enabled:
             self.zone_analytics = ZoneAnalytics(fps=fps, max_lost_frames=self.zone_tracker.max_lost_frames)
@@ -167,12 +167,15 @@ class VideoProcessor:
             if not ret:
                 break
                 
+            if self.heatmap_enabled and self.first_frame is None:
+                self.first_frame = frame.copy()
+                
             frame_count += 1
             
             # 1. Detection (MUST RUN ON CLEAN FRAME)
             result = self.detector.detect(frame, track=self.track)
             
-            # Phase 4.1: Draw Zones Visualization
+            # Draw Zones Visualization
             if self.zones_enabled:
                 overlay = frame.copy()
                 colors = {
@@ -205,7 +208,7 @@ class VideoProcessor:
             # 2. Draw bounding boxes
             person_count = 0
             current_frame_ids = set()
-            phase_3_exits = []
+            store_exits = []
             
             if result.boxes:
                 frame_detections = len(result.boxes)
@@ -227,15 +230,21 @@ class VideoProcessor:
                         current_frame_ids.add(track_id)
                         total_unique_ids.add(track_id)
                         
-                        # Calculate bottom-center for Phase 3 and Phase 4
+                        if self.heatmap_enabled:
+                            cx = int((x1 + x2) / 2)
+                            cy = int((y1 + y2) / 2)
+                            self.heatmap.add_point(cx, cy, weight=1.0, radius=20)
+                            self.tracked_samples += 1
+                        
+                        # Calculate bottom-center for counting and zone analytics
                         if self.count or self.zones_enabled:
                             px = int((x1 + x2) / 2)
                             py = int(y2)
                             
-                            # Phase 3: Counting Logic
+                            # Counting Logic
                             if self.count:
                                 cv2.circle(frame, (px, py), 4, (0, 255, 255), -1)
-                                # Phase 3: Counting Logic (Segment Intersection)
+                                # Counting Logic (Segment Intersection)
                                 if track_id not in track_state:
                                     track_state[track_id] = {'last_point': (px, py), 'last_crossing_frame': -cooldown_frames, 'last_direction': None}
                                 else:
@@ -263,7 +272,7 @@ class VideoProcessor:
                                                         total_entries += 1
                                                     else:
                                                         total_exits += 1
-                                                        phase_3_exits.append(track_id)
+                                                        store_exits.append(track_id)
                                                     total_crossings += 1
                                                     
                                                     track_state[track_id]['last_crossing_frame'] = frame_count
@@ -272,7 +281,7 @@ class VideoProcessor:
                                     # Always update last point
                                     track_state[track_id]['last_point'] = (px, py)
                             
-                            # Phase 4.1 & 4.2: Zone Detection & State Tracking
+                            # Zone Detection & State Tracking
                             if self.zones_enabled:
                                 zone_priority = ["ENTRANCE", "CHECKOUT", "PRODUCT / SHELF", "CENTRAL AISLE"]
                                 best_zone = None
@@ -302,9 +311,9 @@ class VideoProcessor:
                     cv2.rectangle(frame, (x1, y1 - th - 10), (x1 + tw, y1), (0, 255, 0), -1)
                     cv2.putText(frame, label, (x1, y1 - 5), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 1)
 
-            # Phase 4.3: Update analytics state once per frame
+            # Update analytics state once per frame
             if self.zones_enabled:
-                self.zone_analytics.update(frame_count, self.zone_tracker, phase_3_exits)
+                self.zone_analytics.update(frame_count, self.zone_tracker, store_exits)
 
             # Update tracking stats
             if len(current_frame_ids) > 0:
@@ -314,7 +323,7 @@ class VideoProcessor:
             if not id_persists and len(current_frame_ids.intersection(prev_ids)) > 0:
                 id_persists = True
             prev_ids = current_frame_ids
-            # Phase 4.2: Update occupancy stats (Handled dynamically by ZoneTracker)
+            # Update occupancy stats (Handled dynamically by ZoneTracker)
 
             # 3. Calculate FPS
             curr_time = time.time()
@@ -322,14 +331,20 @@ class VideoProcessor:
             prev_time = curr_time
             
             # 4. Display Info (FPS and Person Count)
-            if self.track:
-                info_text = f"RetailVision AI | Active persons: {person_count} | FPS: {current_fps:.1f}"
-            else:
-                info_text = f"FPS: {current_fps:.1f} | People: {person_count}"
-                
-            cv2.putText(frame, info_text, (20, 40), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
+            hud_w = 440
+            hud_h = 135 if self.count else 95
+            hud_x = 20
+            hud_y = height - hud_h - 20
             
-            # Phase 4.2: Draw Occupancy Panel
+            overlay = frame.copy()
+            cv2.rectangle(overlay, (hud_x, hud_y), (hud_x + hud_w, hud_y + hud_h), (0, 0, 0), -1)
+            cv2.addWeighted(overlay, 0.6, frame, 0.4, 0, frame)
+            
+            cv2.putText(frame, "RetailVision AI", (hud_x + 15, hud_y + 40), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
+            info_text = f"Active Persons: {person_count} | FPS: {current_fps:.1f}"
+            cv2.putText(frame, info_text, (hud_x + 15, hud_y + 80), cv2.FONT_HERSHEY_SIMPLEX, 0.75, (220, 220, 220), 2)
+            
+            # Draw Occupancy Panel
             if self.zones_enabled and self.zone_debug:
                 panel_w = 260
                 panel_h = 280
@@ -365,12 +380,12 @@ class VideoProcessor:
                     cv2.putText(frame, text, (x_offset, y_offset), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (220, 220, 220), 1)
                     y_offset += 15
                     
-            # Phase 4.3: Draw Analytics HUD
-            if self.zones_enabled and self.analytics_debug:
+            # Draw Analytics HUD
+            if self.zones_enabled:
                 panel_w = 260
-                panel_h = 280
-                panel_x = 20
-                panel_y = height - panel_h - 20
+                panel_h = 165
+                panel_x = width - panel_w - 20
+                panel_y = 20
                 
                 overlay = frame.copy()
                 cv2.rectangle(overlay, (panel_x, panel_y), (panel_x + panel_w, panel_y + panel_h), (0, 0, 0), -1)
@@ -379,12 +394,12 @@ class VideoProcessor:
                 ay_offset = panel_y + 25
                 ax_offset = panel_x + 10
                 
-                cv2.putText(frame, "PHASE 4.3 ANALYTICS", (ax_offset, ay_offset), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
+                cv2.putText(frame, "JOURNEY ANALYTICS", (ax_offset, ay_offset), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
                 ay_offset += 25
                 cv2.putText(frame, "ACTIVE JOURNEYS", (ax_offset, ay_offset), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
                 ay_offset += 20
                 
-                for track_id, segments in list(self.zone_analytics.journeys.items())[-8:]:
+                for track_id, segments in list(self.zone_analytics.journeys.items())[-5:]:
                     if track_id in self.zone_analytics.finalized_tracks:
                         continue
                     if segments:
@@ -395,7 +410,7 @@ class VideoProcessor:
                         cv2.putText(frame, text, (ax_offset, ay_offset), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (200, 200, 200), 1)
                         ay_offset += 15
             
-            # Draw Phase 3 Counting Overlays
+            # Draw Counting Overlays
             if self.count:
                 # Draw the localized segment
                 cv2.line(frame, (x1_l, y1_l), (x2_l, y2_l), (255, 0, 0), 3)
@@ -414,13 +429,16 @@ class VideoProcessor:
 
                 occupancy = max(0, total_entries - total_exits)
                 count_text = f"ENTRY: {total_entries} | EXIT: {total_exits} | OCCUPANCY: {occupancy}"
-                cv2.putText(frame, count_text, (20, 80), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 0), 2)
+                cv2.putText(frame, count_text, (hud_x + 15, hud_y + 120), cv2.FONT_HERSHEY_SIMPLEX, 0.75, (255, 255, 0), 2)
             
             # Write frame
             out.write(frame)
             
             if frame_count % 30 == 0:
-                print(f"Processed {frame_count} frames...")
+                if total_frames > 0:
+                    print(f"Processing: {frame_count} / {total_frames} frames", end='\r')
+                else:
+                    print(f"Processed {frame_count} frames...", end='\r')
 
         # Release resources
         cap.release()
@@ -431,78 +449,60 @@ class VideoProcessor:
         overall_fps = frame_count / total_processing_time if total_processing_time > 0 else 0
         avg_conf = total_conf / total_detections if total_detections > 0 else 0
         
-        print("Processing complete.")
-        
-        if self.track:
-            print(f"--- Tracking Summary ---")
-            print(f"Total frames processed: {frame_count}")
-            print(f"Max YOLO detections: {max_detections}")
-            print(f"Avg YOLO detections/frame: {total_detections / frame_count:.2f}")
-            print(f"Max simultaneously active IDs: {max_simultaneous_ids}")
-            print(f"Avg tracked IDs/frame: {frames_with_ids / frame_count:.2f}") # Approximation
-            print(f"Total unique tracking IDs: {len(total_unique_ids)}")
-            print(f"Duplicate IDs per frame: False")
-            print(f"IDs persisted across consecutive frames: {id_persists}")
-            print(f"Average detection confidence: {avg_conf:.3f}")
-            print(f"Processing FPS: {overall_fps:.2f}")
-            print(f"------------------------")
-            
-        if self.count:
-            print(f"--- Counting Summary ---")
-            print(f"Total entries: {total_entries}")
-            print(f"Total exits: {total_exits}")
-            print(f"Final occupancy: {max(0, total_entries - total_exits)}")
-            print(f"Crossing events: {total_crossings}")
-            print(f"Default line used: {default_line}")
-            print(f"Duplicate protection: Active (15-frame cooldown)")
-            print(f"Output video: {self.output_path}")
-            print(f"------------------------")
-            
         if self.zones_enabled:
             # Force finalize any remaining open visits at the end of the video
             for track_id in list(self.zone_analytics.open_visits.keys()):
                 self.zone_analytics._close_visit(track_id, frame_count)
                 self.zone_analytics.finalized_tracks.add(track_id)
                 
-            print(f"--- Phase 4.2 Occupancy Summary ---")
-            print(f"Total frames: {frame_count}")
-            print(f"State transitions tracked: {len(self.zone_tracker.transitions) if hasattr(self, 'zone_tracker') else 0}")
-            print(f"Output video: {self.output_path}")
-            print(f"-----------------------------------")
-            if self.analytics_debug:
-                print(f"\n--- PHASE 4.3 ANALYTICS SUMMARY ---")
-                print(f"Total tracking IDs generated: {len(total_unique_ids)}")
-                print(f"Total analytics customers: {len(self.zone_analytics.journeys)}")
-                completed_journeys = len([tid for tid in self.zone_analytics.journeys.keys() if tid in self.zone_analytics.finalized_tracks])
-                print(f"Total completed journeys: {completed_journeys}")
-                print(f"Total zone visits: {len(self.zone_analytics.visits)}")
-                print(f"\nZone statistics:")
-                z_stats = self.zone_analytics.get_zone_statistics()
-                for z, s in z_stats.items():
-                    print(f"  {z}")
-                    print(f"    Visitors: {s['unique_visitors_count']}")
-                    print(f"    Visits: {s['total_visits']}")
-                    print(f"    Avg dwell: {s['avg_dwell']:.1f} sec")
-                    print(f"    Max dwell: {s['max_dwell']:.1f} sec")
-                
-                print(f"\nTop transitions:")
-                t_stats = self.zone_analytics.get_transition_statistics()
-                sorted_t = sorted(t_stats.items(), key=lambda item: item[1], reverse=True)
-                for i, (t_name, count) in enumerate(sorted_t[:5], 1):
-                    print(f"  {i}. {t_name}: {count}")
-                print(f"-----------------------------------")
-                
-            if getattr(self, 'analytics', False):
-                from .analytics_report import AnalyticsDashboard
-                AnalyticsDashboard.generate_report(
-                    output_path=self.output_path,
-                    total_tracking_ids=len(total_unique_ids),
-                    total_analytics_customers=len(self.zone_analytics.journeys),
-                    entries=total_entries,
-                    exits=total_exits,
-                    final_occupancy=max(0, total_entries - total_exits),
-                    zone_stats=self.zone_analytics.get_zone_statistics(),
-                    transition_stats=self.zone_analytics.get_transition_statistics()
-                )
+        if self.heatmap_enabled and self.first_frame is not None:
+            # Generate JSON
+            import json
+            import os
             
-        return True
+            heatmap_start = time.time()
+            max_loc, max_val = self.heatmap.get_peak_density()
+            heatmap_metrics = {
+                "total_frames": frame_count,
+                "tracked_position_samples": self.tracked_samples,
+                "heatmap_resolution": {
+                    "width": width,
+                    "height": height
+                },
+                "peak_density_location": {
+                    "x": int(max_loc[0]),
+                    "y": int(max_loc[1])
+                },
+                "peak_density_value": max_val,
+                "processing_fps": overall_fps
+            }
+            
+            os.makedirs("output", exist_ok=True)
+            out_json_path = "output/heatmap_analytics.json"
+            out_png_path = "output/customer_heatmap.png"
+            
+            with open(out_json_path, "w") as f:
+                json.dump(heatmap_metrics, f, indent=4)
+                
+            final_heatmap_img = self.heatmap.generate_heatmap(self.first_frame, blur_radius=71, alpha_factor=0.75)
+            cv2.imwrite(out_png_path, final_heatmap_img)
+            
+        if getattr(self, 'analytics', False):
+            from .analytics_report import AnalyticsDashboard
+            AnalyticsDashboard.generate_report(
+                output_path=self.output_path,
+                total_tracking_ids=len(total_unique_ids),
+                total_analytics_customers=len(self.zone_analytics.journeys) if self.zones_enabled else 0,
+                entries=total_entries if self.count else 0,
+                exits=total_exits if self.count else 0,
+                final_occupancy=max(0, total_entries - total_exits) if self.count else 0,
+                zone_stats=self.zone_analytics.get_zone_statistics() if self.zones_enabled else {},
+                transition_stats=self.zone_analytics.get_transition_statistics() if self.zones_enabled else {}
+            )
+            
+        return {
+            "customers": len(self.zone_analytics.journeys) if self.zones_enabled else 0,
+            "entries": total_entries if self.count else 0,
+            "exits": total_exits if self.count else 0,
+            "occupancy": max(0, total_entries - total_exits) if self.count else 0
+        }
