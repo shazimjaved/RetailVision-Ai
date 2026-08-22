@@ -382,8 +382,8 @@ class VideoProcessor:
                     
             # Draw Analytics HUD
             if self.zones_enabled:
-                panel_w = 260
-                panel_h = 165
+                panel_w = 340
+                panel_h = 145
                 panel_x = width - panel_w - 20
                 panel_y = 20
                 
@@ -403,9 +403,9 @@ class VideoProcessor:
                     if track_id in self.zone_analytics.finalized_tracks:
                         continue
                     if segments:
-                        journey_str = " -> ".join([s['zone'][:5] for s in segments])
-                        if len(journey_str) > 28:
-                            journey_str = "..." + journey_str[-25:]
+                        journey_str = " -> ".join([s['zone'] for s in segments])
+                        if len(journey_str) > 45:
+                            journey_str = "..." + journey_str[-42:]
                         text = f"ID {track_id:<2}: {journey_str}"
                         cv2.putText(frame, text, (ax_offset, ay_offset), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (200, 200, 200), 1)
                         ay_offset += 15
